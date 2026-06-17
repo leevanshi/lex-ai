@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "RpDNtnpqt8HFhqDf4c0a0"
+uri = "file://artifacts/lexai/public/hero.png"
+type = "image"
+title = "Legal SaaS Hero"

@@ -1,10 +1,11 @@
-# [Project name]
+# LexAI — Legal Document Generator
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A SaaS platform that lets startups generate legally-sound documents (NDAs, service agreements, employment contracts, IP assignments, and more) in minutes, with tiered subscription plans.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
+- `pnpm --filter @workspace/lexai run dev` — run the frontend (dynamic port)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
@@ -14,31 +15,50 @@ _Replace the heading above with the project's name, and this line with one sente
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
+- Frontend: React + Vite, Wouter routing, TanStack Query, shadcn/ui, Framer Motion, Recharts
+- Auth: Clerk (whitelabel, proxy-based, same-domain cookie auth)
+- API: Express 5, contract-first OpenAPI spec → Orval codegen
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- DB schema: `lib/db/src/schema/` — users, subscriptions, documents tables
+- OpenAPI spec: `lib/api-spec/openapi.yaml` — source of truth for all API contracts
+- Generated API hooks: `lib/api-client-react/src/generated/api.ts`
+- API routes: `artifacts/api-server/src/routes/` — users, subscriptions, documents
+- Document templates: `artifacts/api-server/src/lib/documentGenerator.ts`
+- Frontend pages: `artifacts/lexai/src/pages/`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Contract-first API: OpenAPI spec drives both server validation (Zod) and client hooks (Orval codegen). Never hand-write API types on the client.
+- Clerk auth uses proxy middleware on the same domain — no Bearer tokens. The session cookie is automatically included in all API requests.
+- Plan limits enforced server-side: free=3 docs/month (NDA only), pro=20 (NDA+SA+IP+Employment), enterprise=unlimited (all types).
+- Document generation is synchronous and template-based — no external AI dependency in v1.
+- Wouter uses `to=` prop (not `href=`) for Link components.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Landing page** — marketing page with pricing tiers and feature overview
+- **Auth** — Clerk-powered sign-up/sign-in with whitelabel branding
+- **Dashboard** — stats overview (total docs, plan usage, recent docs, charts)
+- **Document Wizard** — 3-step form to generate NDAs, service agreements, employment contracts, IP assignments, ToS
+- **Document Detail** — view, edit, and download generated documents
+- **Subscription** — upgrade/downgrade plans, view usage meter
+- **Settings** — account profile linked to Clerk user data
+
+## Gotchas
+
+- After changing `lib/db` schema, run `pnpm run typecheck:libs` before typechecking leaf packages.
+- Do NOT run `pnpm dev` at the workspace root — use workflows or `--filter` commands.
+- Wouter's `Link` component uses `to=` not `href=`.
+- The `useDownloadDocument` hook is a query (not mutation) — use the raw `downloadDocument()` function for imperative calls.
 
 ## User preferences
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
 
 ## Pointers
 

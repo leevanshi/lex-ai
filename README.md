@@ -1,6 +1,34 @@
-# LexAI — Legal Document Generator
+# LexAI — AI-Powered Legal Document Platform
 
-A SaaS platform that lets startups generate legally-sound documents (NDAs, service agreements, employment contracts, IP assignments, and more) in minutes, with tiered subscription plans.
+A SaaS platform that lets startups generate legally-sound documents (NDAs, service agreements, employment contracts, IP assignments, and more) in minutes, with tiered subscription plans and advanced AI-powered contract analysis.
+
+## ✨ AI Features
+
+LexAI now includes powerful AI capabilities for contract analysis and document generation:
+
+- **📄 Contract Upload & Analysis**: Upload PDF/Word contracts for AI-powered risk assessment
+- **🔍 RAG (Retrieval-Augmented Generation)**: Ask questions about your contracts with context-aware answers
+- **⚠️ Contract Review**: Automatic detection of risky clauses with suggestions
+- **📚 Clause Explanation**: Simple explanations of complex legal language
+- **✍️ AI Drafting**: Generate legal documents with AI assistance
+- **🤝 Negotiation Suggestions**: Get AI-powered suggestions for contract negotiations
+
+### AI API Endpoints
+
+- `POST /api/contracts/upload` - Upload and analyze contracts
+- `GET /api/contracts/user/:userId` - Get user's contracts
+- `POST /api/contracts/:id/analyze` - Analyze contract risks
+- `POST /api/contracts/explain` - Explain legal clauses
+- `POST /api/contracts/:id/query` - RAG query on contracts
+- `POST /api/contracts/negotiate` - Get negotiation suggestions
+- `POST /api/documents/ai-draft` - Generate AI drafts
+- `GET /api/ai-drafts` - Get AI draft history
+
+### AI Requirements
+
+To use AI features, you need:
+- **OpenAI API Key**: Get from https://platform.openai.com/api-keys
+- Set `OPENAI_API_KEY` in your `.env` file
 
 ## Local Development Setup
 
@@ -25,6 +53,7 @@ Open `.env` and fill in the required environment variables:
 - `DATABASE_URL`: Your local or remote PostgreSQL connection string.
 - `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`: Get these from your Clerk Dashboard to enable authentication.
 - `VITE_CLERK_PUBLISHABLE_KEY`: Same as `CLERK_PUBLISHABLE_KEY` (prefix required for Vite client-side access).
+- `OPENAI_API_KEY`: Get from https://platform.openai.com/api-keys for AI features.
 
 ### 3. Install Dependencies
 
@@ -66,13 +95,17 @@ Alternatively, you can start the entire workspace in development mode (if a root
 - **Database**: PostgreSQL + Drizzle ORM
 - **Validation**: Zod, `drizzle-zod`
 - **Build**: esbuild (CommonJS/ESM bundling)
+- **AI/ML**: OpenAI GPT-4o, LangChain, RAG with vector embeddings
+- **Document Processing**: PDF parsing, Word document processing
 
 ## Project Structure
 
-- `lib/db/src/schema/` — DB schema (users, subscriptions, documents tables)
+- `lib/db/src/schema/` — DB schema (users, subscriptions, documents, contracts, AI tables)
 - `lib/api-spec/openapi.yaml` — OpenAPI specification (source of truth for API contracts)
 - `lib/api-client-react/src/generated/api.ts` — Generated API hooks
-- `artifacts/api-server/src/routes/` — Express API routes (users, subscriptions, documents)
+- `artifacts/api-server/src/routes/` — Express API routes (users, subscriptions, documents, contracts)
+- `artifacts/api-server/src/lib/ai/` — AI service implementation (OpenAI, LangChain)
+- `artifacts/api-server/src/lib/documentProcessor.ts` — Document processing (PDF, Word)
 - `artifacts/api-server/src/lib/documentGenerator.ts` — Document templates & generation logic
 - `artifacts/lexai/src/pages/` — React frontend pages
 
@@ -96,6 +129,7 @@ cp .env.example .env.production
 Edit `.env.production` with your production values:
 - Set strong `POSTGRES_PASSWORD`
 - Replace Clerk keys with production keys (`pk_live_...`, `sk_live_...`)
+- Add your OpenAI API key (`OPENAI_API_KEY`)
 - Configure any other required environment variables
 
 2. **Deploy using Docker Compose:**

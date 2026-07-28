@@ -1,9 +1,10 @@
 import { Router } from "express";
-import { db, usersTable, documentsTable } from "@workspace/db";
+import { db, usersTable, documentsTable, aiDraftsTable } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { CreateDocumentBody, UpdateDocumentBody, ListDocumentsQueryParams } from "@workspace/api-zod";
 import { DOCUMENT_TYPES, PLAN_LIMITS, generateDocumentContent } from "../lib/document-templates";
+import { aiService } from "../lib/ai";
 
 const router = Router();
 
@@ -304,6 +305,63 @@ router.get("/documents/:id/download", requireAuth, async (req, res): Promise<voi
     title: d.title,
     content: d.content || "",
   });
+});
+
+// AI Draft generation
+router.post("/documents/ai-draft", requireAuth, async (req, res): Promise<void> => {
+  const clerkUserId = (req as any).clerkUserId as string;
+  const user = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkUserId)).limit(1);
+  if (!user.length) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+
+  const { prompt, documentId, context } = req.body;
+  if (!prompt) {
+    res.status(400).json({ error: "Prompt required" });
+    return;
+  }
+
+  try {
+    const result = await aiService.generateDraft(prompt, context);
+
+    // Save draft to database
+    const [draft] = await db.insert(aiDraftsTable).values({
+      userId: user[0].id,
+      documentId: documentId ? parseInt(documentId) : null,
+      prompt,
+      generatedContent: result.content,
+      model: "gpt-4o",
+      tokensUsed: result.tokensUsed,
+    }).returning();
+
+    res.status(201).json({
+      id: draft.id,
+      content: result.content,
+      tokensUsed: result.tokensUsed,
+    });
+  } catch (error) {
+    console.error("AI draft error:", error);
+    res.status(500).json({ error: "Failed to generate AI draft" });
+  }
+});
+
+// Get AI drafts for user
+router.get("/ai-drafts", requireAuth, async (req, res): Promise<void> => {
+  const clerkUserId = (req as any).clerkUserId as string;
+  const user = await db.select().from(usersTable).where(eq(usersTable.clerkId, clerkUserId)).limit(1);
+  if (!user.length) {
+    res.status(401).json({ error: "User not found" });
+    return;
+  }
+
+  const drafts = await db.select()
+    .from(aiDraftsTable)
+    .where(eq(aiDraftsTable.userId, user[0].id))
+    .orderBy(desc(aiDraftsTable.createdAt))
+    .limit(20);
+
+  res.json(drafts);
 });
 
 export default router;

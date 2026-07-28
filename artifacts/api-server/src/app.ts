@@ -1,6 +1,6 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response } from "express";
 import cors from "cors";
-import pinoHttp from "pino-http";
+import { pinoHttp } from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
 import { publishableKeyFromHost } from "@clerk/shared/keys";
 import {
@@ -38,6 +38,14 @@ app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(cors({ credentials: true, origin: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Health check before Clerk middleware (no auth required)
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
+app.get("/healthz", (_req, res) => {
+  res.json({ status: "ok" });
+});
 
 app.use(
   clerkMiddleware((req) => ({

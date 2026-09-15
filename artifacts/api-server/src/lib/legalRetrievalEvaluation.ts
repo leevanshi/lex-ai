@@ -38,7 +38,7 @@ function evaluate() {
     const ranked = rankLegalSources(query, { limit: 5, minScore: 0.18 });
     const retrieved = ranked.map((entry) => entry.source.id);
     const hits = expected.filter((sourceId) => retrieved.includes(sourceId));
-    const correctSourceAppears = hits.length > 0;
+    const correctSourceAppears = expected.length === 0 ? retrieved.length === 0 : hits.length > 0;
     const topHit = retrieved[0] ?? null;
     const rankingQuality = expected.length > 0 ? (expected.includes(topHit ?? "") ? 1 : 0) : 1;
 

@@ -33,7 +33,7 @@ test("returns multiple relevant sources when a question spans more than one lega
 });
 
 test("deduplicates near-duplicate or repeated source matches", () => {
-  const ranked = rankLegalSources("I need a cheque dishonour remedy and I am also seeking contract damages.", 5);
+  const ranked = rankLegalSources("I need a cheque dishonour remedy and I am also seeking contract damages.", { limit: 5 });
   const ids = ranked.map((entry) => entry.source.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.includes("negotiable-instruments-act"));

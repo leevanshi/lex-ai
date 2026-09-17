@@ -17,8 +17,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
-      "@clerk/react/internal": path.resolve(import.meta.dirname, "src/lib/mock-clerk.tsx"),
-      "@clerk/react": path.resolve(import.meta.dirname, "src/lib/mock-clerk.tsx"),
     },
     dedupe: ["react", "react-dom"],
   },

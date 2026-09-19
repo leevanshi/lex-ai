@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, ShieldAlert, BookOpenText, ExternalLink } from "lucide-react";
+import { customFetch } from "@workspace/api-client-react";
 
 const formatModeLabel = (mode: string) => (mode === "lawyer" ? "Lawyer mode" : "Citizen mode");
 
@@ -21,22 +22,18 @@ export default function AskLexAI() {
     setResult(null);
 
     try {
-      const res = await fetch("/api/ask", {
+      const payload = await customFetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ question, mode }),
       });
-
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        throw new Error(payload.error || "Unable to answer your question right now.");
-      }
-
-      const payload = await res.json();
       setResult(payload);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } catch (err: any) {
+      if (err.data && err.data.error) {
+        setError(err.data.error);
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong.");
+      }
     } finally {
       setLoading(false);
     }

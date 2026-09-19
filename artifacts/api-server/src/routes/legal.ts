@@ -65,9 +65,13 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
     };
 
     res.json(response);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Legal ask error:", error);
-    res.status(500).json({ error: "Failed to answer legal question" });
+    if (error.name === 'AIRateLimitError' || error?.status === 429 || error?.code === 'insufficient_quota') {
+      res.status(429).json({ error: "OpenAI quota exceeded or rate limit reached. Please check your billing details." });
+      return;
+    }
+    res.status(500).json({ error: "Failed to answer legal question", message: error?.message || "Unknown error" });
   }
 });
 

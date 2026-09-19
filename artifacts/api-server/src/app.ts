@@ -58,4 +58,22 @@ app.use(
 
 app.use("/api", router);
 
+// Global error handler
+app.use((err: any, req: Request, res: Response, next: express.NextFunction) => {
+  const clerkUserId = (req as any).clerkUserId || "unauthenticated";
+  
+  console.error("\n[LexAI API ERROR]");
+  console.error(`method: ${req.method}`);
+  console.error(`route: ${req.url}`);
+  console.error(`authenticated user ID: ${clerkUserId}`);
+  console.error(`error type: ${err.name || typeof err}`);
+  console.error(`error message: ${err.message || String(err)}`);
+  console.error(`stack trace:\n${err.stack}\n`);
+
+  res.status(500).json({
+    error: "Internal server error",
+    message: "Unable to process the request"
+  });
+});
+
 export default app;

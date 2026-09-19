@@ -7,6 +7,20 @@ import {
 import { retrieveRelevantLegalSources, type LegalSource } from "../legalKnowledge";
 import { buildLegalSafetyNote, evaluateLegalSafety } from "../legalSafety";
 
+export class AIRateLimitError extends Error {
+  constructor(message: string, public retryAfter?: number) {
+    super(message);
+    this.name = "AIRateLimitError";
+  }
+}
+
+export class AIProviderError extends Error {
+  constructor(message: string, public provider: string) {
+    super(message);
+    this.name = "AIProviderError";
+  }
+}
+
 const DEFAULT_BEDROCK_TEXT_MODEL = "anthropic.claude-3-5-sonnet-20240620-v1:0";
 const DEFAULT_BEDROCK_EMBEDDING_MODEL = "amazon.titan-embed-text-v1";
 
@@ -38,36 +52,29 @@ function getConfiguredProvider(): AIProviderType {
   return process.env.OPENAI_API_KEY ? "openai" : "ollama";
 }
 
-let openai: OpenAI | null = null;
-
-function getOpenAIClient(): OpenAI {
-  if (!openai) {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey || apiKey === "sk-your-openai-api-key-here") {
-      throw new Error("Valid OPENAI_API_KEY environment variable is required");
-    }
-    openai = new OpenAI({ apiKey });
-  }
-  return openai;
-}
-
 class OllamaProvider implements AIProvider {
   providerName = "ollama";
 
   private async request<T>(path: string, payload: Record<string, unknown>): Promise<T> {
     const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
-    const response = await fetch(`${baseUrl}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    try {
+      const response = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Ollama request failed: ${response.status} ${errorText}`);
+      if (!response.ok) {
+        if (response.status === 429) throw new AIRateLimitError("Ollama Rate Limited");
+        const errorText = await response.text();
+        throw new AIProviderError(`Ollama request failed: ${response.status} ${errorText}`, this.providerName);
+      }
+
+      return (await response.json()) as T;
+    } catch (e: any) {
+      if (e instanceof AIRateLimitError || e instanceof AIProviderError) throw e;
+      throw new AIProviderError(e.message, this.providerName);
     }
-
-    return (await response.json()) as T;
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -120,16 +127,23 @@ class BedrockAIProvider implements AIProvider {
   }
 
   private async invokeModel(modelId: string, input: Record<string, unknown>) {
-    const command = new InvokeModelCommand({
-      modelId,
-      contentType: "application/json",
-      accept: "application/json",
-      body: new TextEncoder().encode(JSON.stringify(input)),
-    });
+    try {
+      const command = new InvokeModelCommand({
+        modelId,
+        contentType: "application/json",
+        accept: "application/json",
+        body: new TextEncoder().encode(JSON.stringify(input)),
+      });
 
-    const response = await this.client.send(command);
-    const body = response.body ? Buffer.from(response.body).toString("utf-8") : "{}";
-    return JSON.parse(body);
+      const response = await this.client.send(command);
+      const body = response.body ? Buffer.from(response.body).toString("utf-8") : "{}";
+      return JSON.parse(body);
+    } catch (e: any) {
+      if (e.name === "ThrottlingException") {
+        throw new AIRateLimitError("AWS Bedrock rate limit exceeded");
+      }
+      throw new AIProviderError(e.message || "Bedrock error", this.providerName);
+    }
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -140,7 +154,7 @@ class BedrockAIProvider implements AIProvider {
 
     const embedding = response.embedding ?? response.embeddings?.[0] ?? [];
     if (!Array.isArray(embedding)) {
-      throw new Error("Bedrock embedding response did not include a numeric vector");
+      throw new AIProviderError("Bedrock embedding response did not include a numeric vector", this.providerName);
     }
 
     return embedding.map((value) => Number(value));
@@ -183,14 +197,34 @@ class BedrockAIProvider implements AIProvider {
 
 class OpenAIProvider implements AIProvider {
   providerName = "openai";
+  private openai: OpenAI;
+
+  constructor() {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey || apiKey === "sk-your-openai-api-key-here") {
+      throw new Error("Valid OPENAI_API_KEY environment variable is required");
+    }
+    this.openai = new OpenAI({ apiKey });
+  }
+
+  private handleError(e: any) {
+    if (e.status === 429 || e.code === 'insufficient_quota' || e.type === 'insufficient_quota') {
+      throw new AIRateLimitError("OpenAI quota or rate limit exceeded");
+    }
+    throw new AIProviderError(e.message || "OpenAI API error", this.providerName);
+  }
 
   async generateEmbedding(text: string): Promise<number[]> {
-    const client = getOpenAIClient();
-    const response = await client.embeddings.create({
-      model: "text-embedding-3-small",
-      input: text,
-    });
-    return response.data[0].embedding;
+    try {
+      const response = await this.openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: text,
+      });
+      return response.data[0].embedding;
+    } catch (e) {
+      this.handleError(e);
+      return [];
+    }
   }
 
   async generateText({
@@ -202,38 +236,45 @@ class OpenAIProvider implements AIProvider {
     userPrompt: string;
     maxTokens?: number;
   }): Promise<string> {
-    const client = getOpenAIClient();
-    const response = await client.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: maxTokens,
-    });
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        max_tokens: maxTokens,
+      });
 
-    return response.choices[0].message.content || "";
+      return response.choices[0].message.content || "";
+    } catch (e) {
+      this.handleError(e);
+      return "";
+    }
   }
 }
 
 export class AIService {
   private static instance: AIService;
-  private provider: AIProvider;
+  private primaryProvider: AIProvider;
+  private fallbackProvider?: AIProvider;
 
   private constructor() {
-    const configuredProvider = getConfiguredProvider();
-
-    if (configuredProvider === "ollama") {
-      this.provider = new OllamaProvider();
-      return;
+    this.primaryProvider = this.instantiateProvider(getConfiguredProvider());
+    
+    // Simple fallback logic if primary is Bedrock or OpenAI
+    if (this.primaryProvider.providerName !== "ollama" && process.env.OLLAMA_BASE_URL) {
+       this.fallbackProvider = new OllamaProvider();
     }
+  }
 
-    if (configuredProvider === "bedrock") {
-      this.provider = new BedrockAIProvider();
-      return;
+  private instantiateProvider(type: AIProviderType): AIProvider {
+    switch (type) {
+      case "ollama": return new OllamaProvider();
+      case "bedrock": return new BedrockAIProvider();
+      case "openai": return new OpenAIProvider();
+      default: return new OllamaProvider();
     }
-
-    this.provider = new OpenAIProvider();
   }
 
   static getInstance(): AIService {
@@ -243,8 +284,36 @@ export class AIService {
     return AIService.instance;
   }
 
+  private async executeWithRetry<T>(operation: (provider: AIProvider) => Promise<T>): Promise<T> {
+    const maxRetries = 2;
+    let attempt = 0;
+
+    while (attempt <= maxRetries) {
+      try {
+        return await operation(this.primaryProvider);
+      } catch (error: any) {
+        if (error instanceof AIRateLimitError) {
+          console.warn(`[AI Service] Rate limited on ${this.primaryProvider.providerName}. Attempt ${attempt + 1}/${maxRetries + 1}`);
+          if (attempt === maxRetries) {
+            if (this.fallbackProvider) {
+               console.warn(`[AI Service] Falling back to ${this.fallbackProvider.providerName}`);
+               return await operation(this.fallbackProvider);
+            }
+            throw error;
+          }
+          // Exponential backoff
+          await new Promise((res) => setTimeout(res, Math.pow(2, attempt) * 1000));
+          attempt++;
+        } else {
+          throw error;
+        }
+      }
+    }
+    throw new Error("AI Operation failed");
+  }
+
   async generateEmbedding(text: string): Promise<number[]> {
-    return this.provider.generateEmbedding(text);
+    return this.executeWithRetry((p) => p.generateEmbedding(text));
   }
 
   async chunkText(text: string, chunkSize: number = 1000, chunkOverlap: number = 200): Promise<string[]> {
@@ -267,10 +336,10 @@ export class AIService {
     const systemPrompt = `You are an expert legal contract analyst. Analyze contracts for risks and provide clear explanations. Return JSON only with keys riskLevel, summary, and riskyClauses. Risky clauses should each include text, risk, and suggestion.`;
     const userPrompt = `Analyze this contract:\n\n${content}`;
 
-    const raw = await this.provider.generateText({
+    const raw = await this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
-    });
+    }));
 
     return parseJsonObject(raw, {
       riskLevel: "medium",
@@ -283,10 +352,10 @@ export class AIService {
     const systemPrompt = "You are a legal expert who explains complex legal language in simple, plain English. Keep the answer practical and accessible, and clearly state when a clause may require lawyer review.";
     const userPrompt = `Explain this legal clause in simple terms:\n\n${clause}`;
 
-    return this.provider.generateText({
+    return this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
-    });
+    }));
   }
 
   async generateDraft(prompt: string, context?: string): Promise<{
@@ -296,10 +365,10 @@ export class AIService {
     const systemPrompt = "You are an expert legal document drafter. Generate clear, professional legal documents based on the user's requirements. Use standard legal terminology while keeping the language accessible and avoid giving legal advice as final authority.";
     const userPrompt = context ? `Context: ${context}\n\nRequest: ${prompt}` : prompt;
 
-    const content = await this.provider.generateText({
+    const content = await this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
-    });
+    }));
 
     return {
       content,
@@ -317,10 +386,10 @@ export class AIService {
     const systemPrompt = "You are a skilled contract negotiator. Provide specific, actionable suggestions to improve contract terms. Return valid JSON with a suggestions array, where each item has originalText, suggestedText, and reasoning.";
     const userPrompt = `This clause is currently ${position} to my position. Provide negotiation suggestions:\n\n${clause}`;
 
-    const raw = await this.provider.generateText({
+    const raw = await this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
-    });
+    }));
 
     return parseJsonObject(raw, {
       suggestions: [],
@@ -335,10 +404,10 @@ export class AIService {
     const systemPrompt = "You are a legal expert answering questions based only on the provided contract context. If the context does not include the answer, say so clearly and avoid guessing. Cite the relevant context in your answer by referencing the source context numbers.";
     const userPrompt = `Context:\n${context}\n\nQuestion: ${question}`;
 
-    return this.provider.generateText({
+    return this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
-    });
+    }));
   }
 
   async answerLegalQuestion(
@@ -367,11 +436,11 @@ export class AIService {
 
     const userPrompt = `Question: ${question}\n\nRelevant legal sources:\n${legalContext}`;
 
-    return this.provider.generateText({
+    return this.executeWithRetry((p) => p.generateText({
       systemPrompt,
       userPrompt,
       maxTokens: 1500,
-    });
+    }));
   }
 }
 

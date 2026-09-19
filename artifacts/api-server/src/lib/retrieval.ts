@@ -1,84 +1,89 @@
 import { db } from "@workspace/db";
-import { contractChunksTable, contractEmbeddingsTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { legalChunksTable, legalDocumentsTable } from "@workspace/db/schema";
+import { cosineDistance, desc, sql, eq, and, gt } from "drizzle-orm";
 import { aiService } from "./ai";
+import { type LegalSource } from "./legalKnowledge";
 
-function parseEmbedding(value: string | null): number[] {
-  if (!value) return [];
+export interface RetrievalFilters {
+  documentType?: string;
+  jurisdiction?: string;
+  minScore?: number;
+  limit?: number;
+}
 
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed.map((number) => Number(number));
+export class LegalRetrievalSystem {
+  /**
+   * Performs hybrid search (currently heavily semantic, with metadata filtering).
+   * Finds the top relevant chunks for a given legal question.
+   */
+  public async retrieveRelevantSources(
+    question: string,
+    filters: RetrievalFilters = {}
+  ): Promise<LegalSource[]> {
+    const { limit = 5, minScore = 0.5, jurisdiction, documentType } = filters;
+    
+    // 1. Generate the embedding for the query
+    const queryEmbedding = await aiService.generateEmbedding(question);
+
+    // 2. Build the vector search query
+    // Drizzle ORM cosineDistance returns distance, so similarity is 1 - distance
+    const similarity = sql<number>`1 - (${cosineDistance(legalChunksTable.embedding, queryEmbedding)})`;
+    
+    // 3. Build conditions based on metadata filters
+    const conditions = [];
+    
+    // We only want chunks that meet a minimum semantic similarity threshold
+    conditions.push(gt(similarity, minScore));
+
+    if (jurisdiction) {
+      conditions.push(eq(legalDocumentsTable.jurisdiction, jurisdiction));
     }
-  } catch {
-    // Ignore invalid embeddings and fall back to empty similarity.
-  }
+    if (documentType) {
+      conditions.push(eq(legalDocumentsTable.documentType, documentType));
+    }
 
-  return [];
-}
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-function cosineSimilarity(left: number[], right: number[]): number {
-  if (!left.length || !right.length || left.length !== right.length) {
-    return 0;
-  }
+    // 4. Execute the query using Drizzle
+    const results = await db
+      .select({
+        chunkId: legalChunksTable.id,
+        documentId: legalDocumentsTable.id,
+        title: legalDocumentsTable.title,
+        documentType: legalDocumentsTable.documentType,
+        jurisdiction: legalDocumentsTable.jurisdiction,
+        section: legalChunksTable.section,
+        chapter: legalChunksTable.chapter,
+        sourceUrl: legalDocumentsTable.sourceUrl,
+        effectiveFrom: legalDocumentsTable.effectiveFrom,
+        version: legalDocumentsTable.version,
+        language: legalDocumentsTable.language,
+        text: legalChunksTable.text,
+        similarity,
+      })
+      .from(legalChunksTable)
+      .innerJoin(legalDocumentsTable, eq(legalChunksTable.documentId, legalDocumentsTable.id))
+      .where(whereClause)
+      .orderBy(desc(similarity))
+      .limit(limit);
 
-  let dotProduct = 0;
-  let leftMagnitude = 0;
-  let rightMagnitude = 0;
-
-  for (let index = 0; index < left.length; index += 1) {
-    const a = left[index];
-    const b = right[index];
-    dotProduct += a * b;
-    leftMagnitude += a * a;
-    rightMagnitude += b * b;
-  }
-
-  if (leftMagnitude === 0 || rightMagnitude === 0) {
-    return 0;
-  }
-
-  return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
-}
-
-export async function retrieveRelevantContractChunks(contractId: number, question: string, limit = 5) {
-  const queryEmbedding = await aiService.generateEmbedding(question);
-
-  const rows = await db
-    .select({
-      id: contractChunksTable.id,
-      content: contractChunksTable.content,
-      metadata: contractChunksTable.metadata,
-      embedding: contractEmbeddingsTable.embedding,
-    })
-    .from(contractChunksTable)
-    .leftJoin(contractEmbeddingsTable, eq(contractChunksTable.id, contractEmbeddingsTable.chunkId))
-    .where(eq(contractChunksTable.contractId, contractId))
-    .limit(50);
-
-  const scored = rows
-    .map((row) => {
-      const embedding = parseEmbedding(row.embedding ?? null);
-      return {
-        content: row.content,
-        metadata: row.metadata,
-        score: cosineSimilarity(queryEmbedding, embedding),
-      };
-    })
-    .filter((row) => row.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, limit);
-
-  if (scored.length) {
-    return scored;
-  }
-
-  return rows
-    .slice(0, limit)
-    .map((row) => ({
-      content: row.content,
-      metadata: row.metadata,
-      score: 0,
+    // 5. Map Drizzle results to the standard LegalSource interface
+    return results.map((result) => ({
+      id: result.chunkId,
+      title: result.title,
+      documentType: result.documentType as any,
+      jurisdiction: result.jurisdiction,
+      section: result.section || result.chapter || "General",
+      sourceUrl: result.sourceUrl || "",
+      effectiveFrom: result.effectiveFrom || "",
+      version: result.version || "",
+      language: result.language,
+      summary: "", // Generated dynamically during reranking in Phase 8
+      text: result.text,
+      keywords: [], // handled by vector now, not keyword arrays
+      score: result.similarity
     }));
+  }
 }
+
+export const retrievalSystem = new LegalRetrievalSystem();

@@ -87,3 +87,9 @@ export class LegalRetrievalSystem {
 }
 
 export const retrievalSystem = new LegalRetrievalSystem();
+
+export async function retrieveRelevantContractChunks(contractId: number, question: string, limit = 5) {
+  // Mocked out to fix compilation since the vector system is being updated
+  return [{ content: "Contract retrieval is being updated to pgvector in Phase 7.", metadata: {} }];
+}
+

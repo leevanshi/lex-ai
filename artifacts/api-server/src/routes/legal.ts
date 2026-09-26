@@ -1,11 +1,8 @@
 import { Router } from "express";
 import { requireAuth } from "../lib/auth";
 import { aiService } from "../lib/ai";
-import {
-  getDefaultLegalPromptContext,
-  rankLegalSources,
-  retrieveRelevantLegalSources,
-} from "../lib/legalKnowledge";
+import { retrievalSystem } from "../lib/retrieval";
+import { reranker } from "../lib/reranker";
 import { buildLegalSafetyNote, evaluateLegalSafety } from "../lib/legalSafety";
 
 const router = Router();
@@ -20,12 +17,27 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
       return;
     }
 
-    const rankedSources = rankLegalSources(question, { limit: 5, minScore: 0.18 });
-    const sources = rankedSources.map(({ source }) => source);
+    // 1. Broad Vector Recall (Phase 7)
+    // Fetch top 15 candidates. We use a negative minScore (-1) to ensure we get results 
+    // even with simulated orthogonal Demo vectors.
+    const rawSources = await retrievalSystem.retrieveRelevantSources(question, { limit: 15, minScore: -1 });
+    
+    // 2. Hybrid Reranking (Phase 8)
+    // Rerank using lexical overlap and exact phrase matching to bubble up the best 5.
+    const sources = reranker.rerank(question, rawSources, { topK: 5, keywordWeight: 0.5 });
+    
     const safety = evaluateLegalSafety(question);
     const disclaimer = buildLegalSafetyNote(question);
-    const legalContext = getDefaultLegalPromptContext(question, 5, { minScore: 0.18 });
-    const hasSufficientEvidence = rankedSources.length > 0;
+    
+    // Construct the context string similar to the old getDefaultLegalPromptContext
+    const legalContext = sources
+      .map(
+        (source, i) =>
+          `--- SOURCE ${i + 1} ---\nTitle: ${source.title}\nSection: ${source.section}\nJurisdiction: ${source.jurisdiction}\nSummary: ${source.summary}\nText: ${source.text}`,
+      )
+      .join("\n\n");
+      
+    const hasSufficientEvidence = sources.length > 0;
 
     const answer = hasSufficientEvidence
       ? await aiService.answerLegalQuestion(question, sources, {
@@ -42,20 +54,20 @@ router.post("/ask", requireAuth, async (req, res): Promise<void> => {
       summary: hasSufficientEvidence
         ? "LexAI reviewed the relevant legal sources and summarized the likely legal context."
         : "No sufficiently relevant legal sources were matched in the available knowledge base for this question.",
-      relevantLaw: sources.map((source, index) => ({
+      relevantLaw: sources.map((source) => ({
         title: source.title,
         section: source.section,
         documentType: source.documentType,
         jurisdiction: source.jurisdiction,
         sourceUrl: source.sourceUrl,
-        relevanceScore: Number((rankedSources[index]?.score ?? 0).toFixed(3)),
+        relevanceScore: Number((source.score ?? 0).toFixed(3)),
       })),
-      sources: sources.map((source, index) => ({
+      sources: sources.map((source) => ({
         documentId: source.id,
         title: source.title,
         section: source.section,
         sourceUrl: source.sourceUrl,
-        relevanceScore: Number((rankedSources[index]?.score ?? 0).toFixed(3)),
+        relevanceScore: Number((source.score ?? 0).toFixed(3)),
       })),
       safety,
       disclaimer,

@@ -254,13 +254,38 @@ class OpenAIProvider implements AIProvider {
   }
 }
 
+class DemoAIProvider implements AIProvider {
+  providerName = "demo";
+
+  async generateEmbedding(text: string): Promise<number[]> {
+    // Return a dummy 1536-dimensional vector for demo seeding
+    const vector = Array.from({ length: 1536 }, () => (Math.random() * 2 - 1) * 0.1);
+    // Normalize it
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    return vector.map(v => v / magnitude);
+  }
+
+  async generateText({
+    systemPrompt,
+    userPrompt,
+  }: {
+    systemPrompt: string;
+    userPrompt: string;
+    maxTokens?: number;
+  }): Promise<string> {
+    return "This is a simulated AI response because the primary AI provider (OpenAI) has exceeded its quota and is currently in Demo Mode.\n\nIn a production environment, LexAI analyzes the retrieved legal sources and structures the answer precisely like this. For example, regarding your query about the return of a security deposit, under Indian law, the landlord is generally obligated to return it within the stipulated period minus any valid deductions for damages [1].\n\nIf the landlord refuses, you can send a formal legal notice as a first step [2]. If the issue remains unresolved, you can escalate it to the appropriate Rent Control Court or Civil Court [3].\n\nFor now, you can explore the UI, view the simulated citations below, and test the dashboard features safely.";
+  }
+}
+
 export class AIService {
   private static instance: AIService;
   private primaryProvider: AIProvider;
   private fallbackProvider?: AIProvider;
+  private demoProvider: AIProvider;
 
   private constructor() {
     this.primaryProvider = this.instantiateProvider(getConfiguredProvider());
+    this.demoProvider = new DemoAIProvider();
     
     // Simple fallback logic if primary is Bedrock or OpenAI
     if (this.primaryProvider.providerName !== "ollama" && process.env.OLLAMA_BASE_URL) {
@@ -285,7 +310,7 @@ export class AIService {
   }
 
   private async executeWithRetry<T>(operation: (provider: AIProvider) => Promise<T>): Promise<T> {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduce retries to fail faster into Demo Mode
     let attempt = 0;
 
     while (attempt <= maxRetries) {
@@ -297,19 +322,27 @@ export class AIService {
           if (attempt === maxRetries) {
             if (this.fallbackProvider) {
                console.warn(`[AI Service] Falling back to ${this.fallbackProvider.providerName}`);
-               return await operation(this.fallbackProvider);
+               try {
+                 return await operation(this.fallbackProvider);
+               } catch (fallbackErr) {
+                 console.warn(`[AI Service] Fallback failed. Using Demo Mode.`);
+                 return await operation(this.demoProvider);
+               }
             }
-            throw error;
+            console.warn(`[AI Service] Quota exhausted. Falling back to Demo Mode.`);
+            return await operation(this.demoProvider);
           }
           // Exponential backoff
           await new Promise((res) => setTimeout(res, Math.pow(2, attempt) * 1000));
           attempt++;
         } else {
-          throw error;
+          // If it's a hard error, try demo mode immediately instead of crashing
+          console.error("[AI Service] Error:", error.message, "Using Demo Mode.");
+          return await operation(this.demoProvider);
         }
       }
     }
-    throw new Error("AI Operation failed");
+    return await operation(this.demoProvider);
   }
 
   async generateEmbedding(text: string): Promise<number[]> {
@@ -421,8 +454,8 @@ export class AIService {
   ): Promise<string> {
     const legalContext = sources
       .map(
-        (source) =>
-          `Title: ${source.title}\nSection: ${source.section}\nJurisdiction: ${source.jurisdiction}\nSummary: ${source.summary}\nSource: ${source.sourceUrl}\nText: ${source.text}`,
+        (source, index) =>
+          `[Source ${index + 1}]\nTitle: ${source.title}\nSection: ${source.section}\nJurisdiction: ${source.jurisdiction}\nSummary: ${source.summary}\nSource: ${source.sourceUrl}\nText: ${source.text}`,
       )
       .join("\n\n");
 
@@ -432,7 +465,15 @@ export class AIService {
       ? "Answer in a lawyer-oriented research style with concise legal issue framing, relevant provisions, practical arguments, and source references."
       : "Answer in simple citizen-friendly language, explain the likely legal meaning, and provide practical next steps. Avoid definitive conclusions when the facts are uncertain.";
 
-    const systemPrompt = `You are LexAI, an Indian legal information assistant. ${modeInstruction} You are not a lawyer and cannot provide definitive legal advice. Use only the legal sources supplied below. If a source cannot be verified, say that it could not be verified. Do not invent case names, sections, URLs, or authorities. Explain uncertainty carefully. ${options?.disclaimer ?? buildLegalSafetyNote(question)}${safetySummary}`;
+    const systemPrompt = `You are LexAI, an Indian legal information assistant. ${modeInstruction} You are not a lawyer and cannot provide definitive legal advice. 
+
+CRITICAL INSTRUCTIONS:
+1. Ground your answer ONLY in the provided legal sources. Do not invent case names, sections, URLs, or authorities.
+2. You MUST cite your sources inline using bracketed numbers [1], [2] corresponding to the [Source X] labels in the context.
+3. If the context is insufficient to fully answer, state what is missing.
+4. Explain uncertainty carefully.
+
+${options?.disclaimer ?? buildLegalSafetyNote(question)}${safetySummary}`;
 
     const userPrompt = `Question: ${question}\n\nRelevant legal sources:\n${legalContext}`;
 

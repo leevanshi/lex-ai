@@ -288,6 +288,107 @@ paths:
                 items:
                   $ref: "#/components/schemas/DocumentType"
 
+  /contracts/upload:
+    post:
+      operationId: uploadContract
+      tags: [contracts]
+      summary: Upload a contract for analysis
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, userId]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                userId:
+                  type: string
+                title:
+                  type: string
+      responses:
+        "200":
+          description: Upload response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractUploadResponse"
+        "400":
+          description: Bad request
+
+  /contracts/user/{userId}:
+    get:
+      operationId: listContracts
+      tags: [contracts]
+      summary: List all uploaded contracts for a user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of contracts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+  /contracts/{id}:
+    get:
+      operationId: getContract
+      tags: [contracts]
+      summary: Get contract details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contract details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+        "404":
+          description: Not found
+
+  /contracts/{id}/query:
+    post:
+      operationId: queryContract
+      tags: [contracts]
+      summary: Query a contract using RAG
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RAGQueryInput"
+      responses:
+        "200":
+          description: Query answer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RAGQueryResponse"
+        "400":
+          description: Bad request
+        "500":
+          description: Server error
+
 components:
   schemas:
     HealthStatus:
@@ -491,3 +592,55 @@ components:
               type: ["integer", "null"]
             used:
               type: integer
+
+    Contract:
+      type: object
+      required: [id, userId, title, fileName, fileType, fileSize, status, uploadedAt]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        title:
+          type: string
+        fileName:
+          type: string
+        fileType:
+          type: string
+        fileSize:
+          type: integer
+        content:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [processing, ready, error]
+        uploadedAt:
+          type: string
+        processedAt:
+          type: ["string", "null"]
+
+    ContractUploadResponse:
+      type: object
+      required: [contractId, status]
+      properties:
+        contractId:
+          type: integer
+        status:
+          type: string
+          enum: [processing, ready, error]
+
+    RAGQueryInput:
+      type: object
+      required: [question]
+      properties:
+        question:
+          type: string
+
+    RAGQueryResponse:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+
+

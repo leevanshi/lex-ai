@@ -243,3 +243,77 @@ export const GetDocumentTypesResponseItem = zod.object({
 export const GetDocumentTypesResponse = zod.array(GetDocumentTypesResponseItem)
 
 
+/**
+ * @summary Upload a contract for analysis
+ */
+export const UploadContractBody = zod.object({
+  "file": zod.instanceof(File),
+  "userId": zod.string(),
+  "title": zod.string().optional()
+})
+
+export const UploadContractResponse = zod.object({
+  "contractId": zod.number(),
+  "status": zod.enum(['processing', 'ready', 'error'])
+})
+
+
+/**
+ * @summary List all uploaded contracts for a user
+ */
+export const ListContractsParams = zod.object({
+  "userId": zod.coerce.number()
+})
+
+export const ListContractsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "fileType": zod.string(),
+  "fileSize": zod.number(),
+  "content": zod.string().nullish(),
+  "status": zod.enum(['processing', 'ready', 'error']),
+  "uploadedAt": zod.string(),
+  "processedAt": zod.string().nullish()
+})
+export const ListContractsResponse = zod.array(ListContractsResponseItem)
+
+
+/**
+ * @summary Get contract details
+ */
+export const GetContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetContractResponse = zod.object({
+  "id": zod.number(),
+  "userId": zod.number(),
+  "title": zod.string(),
+  "fileName": zod.string(),
+  "fileType": zod.string(),
+  "fileSize": zod.number(),
+  "content": zod.string().nullish(),
+  "status": zod.enum(['processing', 'ready', 'error']),
+  "uploadedAt": zod.string(),
+  "processedAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Query a contract using RAG
+ */
+export const QueryContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const QueryContractBody = zod.object({
+  "question": zod.string()
+})
+
+export const QueryContractResponse = zod.object({
+  "answer": zod.string()
+})
+
+

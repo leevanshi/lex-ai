@@ -186,8 +186,60 @@ export interface DashboardStats {
   planLimits: DashboardStatsPlanLimits;
 }
 
+export type ContractStatus = typeof ContractStatus[keyof typeof ContractStatus];
+
+
+export const ContractStatus = {
+  processing: 'processing',
+  ready: 'ready',
+  error: 'error',
+} as const;
+
+export interface Contract {
+  id: number;
+  userId: number;
+  title: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  /** @nullable */
+  content?: string | null;
+  status: ContractStatus;
+  uploadedAt: string;
+  /** @nullable */
+  processedAt?: string | null;
+}
+
+export type ContractUploadResponseStatus = typeof ContractUploadResponseStatus[keyof typeof ContractUploadResponseStatus];
+
+
+export const ContractUploadResponseStatus = {
+  processing: 'processing',
+  ready: 'ready',
+  error: 'error',
+} as const;
+
+export interface ContractUploadResponse {
+  contractId: number;
+  status: ContractUploadResponseStatus;
+}
+
+export interface RAGQueryInput {
+  question: string;
+}
+
+export interface RAGQueryResponse {
+  answer: string;
+}
+
 export type ListDocumentsParams = {
 type?: string;
 status?: string;
+};
+
+export type UploadContractBody = {
+  file: Blob;
+  userId: string;
+  title?: string;
 };
 

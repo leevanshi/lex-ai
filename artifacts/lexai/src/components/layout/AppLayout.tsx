@@ -12,6 +12,7 @@ import {
   MessageSquareText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { motion } from "framer-motion";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -57,14 +58,21 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <Link 
                 key={item.name} 
                 to={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   isActive 
-                    ? "bg-slate-100 text-slate-900" 
+                    ? "text-indigo-700" 
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
               >
-                <item.icon className={`w-4 h-4 ${isActive ? "text-slate-900" : "text-slate-400"}`} />
-                {item.name}
+                {isActive && (
+                  <motion.div
+                    layoutId="sidebar-active"
+                    className="absolute inset-0 bg-indigo-50 rounded-md -z-10"
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  />
+                )}
+                <item.icon className={`w-4 h-4 z-10 ${isActive ? "text-indigo-700" : "text-slate-400"}`} />
+                <span className="z-10">{item.name}</span>
               </Link>
             );
           })}

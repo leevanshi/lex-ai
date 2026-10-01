@@ -48,14 +48,30 @@ export interface ButtonProps
   asChild?: boolean
 }
 
+import { motion } from "framer-motion"
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    
+    // If asChild is true, we don't want to break the Slot logic, so we just use standard tailwind.
+    // Otherwise we use framer-motion for the nice tap effects.
+    if (asChild) {
+      return (
+        <Comp
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          {...props}
+        />
+      )
+    }
+
     return (
-      <Comp
+      <motion.button
+        whileTap={{ scale: 0.97 }}
         className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
+        ref={ref as any}
+        {...(props as any)}
       />
     )
   }

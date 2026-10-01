@@ -20,6 +20,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  Contract,
+  ContractUploadResponse,
   DashboardStats,
   Document,
   DocumentDownload,
@@ -28,9 +30,12 @@ import type {
   DocumentUpdate,
   HealthStatus,
   ListDocumentsParams,
+  RAGQueryInput,
+  RAGQueryResponse,
   Subscription,
   SubscriptionPlan,
   SubscriptionUpgradeInput,
+  UploadContractBody,
   UserProfile
 } from './api.schemas';
 
@@ -1176,4 +1181,307 @@ export function useGetDocumentTypes<TData = Awaited<ReturnType<typeof getDocumen
 
 
 
+
+export const getUploadContractUrl = () => {
+
+
+
+
+  return `/api/contracts/upload`
+}
+
+/**
+ * @summary Upload a contract for analysis
+ */
+export const uploadContract = async (uploadContractBody: UploadContractBody, options?: RequestInit): Promise<ContractUploadResponse> => {
+    const formData = new FormData();
+formData.append(`file`, uploadContractBody.file);
+formData.append(`userId`, uploadContractBody.userId);
+if(uploadContractBody.title !== undefined) {
+ formData.append(`title`, uploadContractBody.title);
+ }
+
+  return customFetch<ContractUploadResponse>(getUploadContractUrl(),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body:
+      formData,
+  }
+);}
+
+
+
+
+export const getUploadContractMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadContract>>, TError,{data: BodyType<UploadContractBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadContract>>, TError,{data: BodyType<UploadContractBody>}, TContext> => {
+
+const mutationKey = ['uploadContract'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadContract>>, {data: BodyType<UploadContractBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  uploadContract(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadContractMutationResult = NonNullable<Awaited<ReturnType<typeof uploadContract>>>
+    export type UploadContractMutationBody = BodyType<UploadContractBody>
+    export type UploadContractMutationError = ErrorType<void>
+
+    /**
+ * @summary Upload a contract for analysis
+ */
+export const useUploadContract = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadContract>>, TError,{data: BodyType<UploadContractBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadContract>>,
+        TError,
+        {data: BodyType<UploadContractBody>},
+        TContext
+      > => {
+      return useMutation(getUploadContractMutationOptions(options));
+    }
+
+export const getListContractsUrl = (userId: number,) => {
+
+
+
+
+  return `/api/contracts/user/${userId}`
+}
+
+/**
+ * @summary List all uploaded contracts for a user
+ */
+export const listContracts = async (userId: number, options?: RequestInit): Promise<Contract[]> => {
+
+  return customFetch<Contract[]>(getListContractsUrl(userId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListContractsQueryKey = (userId: number,) => {
+    return [
+    `/api/contracts/user/${userId}`
+    ] as const;
+    }
+
+
+export const getListContractsQueryOptions = <TData = Awaited<ReturnType<typeof listContracts>>, TError = ErrorType<unknown>>(userId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContracts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListContractsQueryKey(userId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listContracts>>> = ({ signal }) => listContracts(userId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(userId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listContracts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListContractsQueryResult = NonNullable<Awaited<ReturnType<typeof listContracts>>>
+export type ListContractsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all uploaded contracts for a user
+ */
+
+export function useListContracts<TData = Awaited<ReturnType<typeof listContracts>>, TError = ErrorType<unknown>>(
+ userId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listContracts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListContractsQueryOptions(userId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetContractUrl = (id: number,) => {
+
+
+
+
+  return `/api/contracts/${id}`
+}
+
+/**
+ * @summary Get contract details
+ */
+export const getContract = async (id: number, options?: RequestInit): Promise<Contract> => {
+
+  return customFetch<Contract>(getGetContractUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetContractQueryKey = (id: number,) => {
+    return [
+    `/api/contracts/${id}`
+    ] as const;
+    }
+
+
+export const getGetContractQueryOptions = <TData = Awaited<ReturnType<typeof getContract>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContract>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetContractQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getContract>>> = ({ signal }) => getContract(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getContract>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetContractQueryResult = NonNullable<Awaited<ReturnType<typeof getContract>>>
+export type GetContractQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get contract details
+ */
+
+export function useGetContract<TData = Awaited<ReturnType<typeof getContract>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getContract>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetContractQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getQueryContractUrl = (id: number,) => {
+
+
+
+
+  return `/api/contracts/${id}/query`
+}
+
+/**
+ * @summary Query a contract using RAG
+ */
+export const queryContract = async (id: number,
+    rAGQueryInput: RAGQueryInput, options?: RequestInit): Promise<RAGQueryResponse> => {
+
+  return customFetch<RAGQueryResponse>(getQueryContractUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      rAGQueryInput,)
+  }
+);}
+
+
+
+
+export const getQueryContractMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryContract>>, TError,{id: number;data: BodyType<RAGQueryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof queryContract>>, TError,{id: number;data: BodyType<RAGQueryInput>}, TContext> => {
+
+const mutationKey = ['queryContract'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryContract>>, {id: number;data: BodyType<RAGQueryInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  queryContract(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QueryContractMutationResult = NonNullable<Awaited<ReturnType<typeof queryContract>>>
+    export type QueryContractMutationBody = BodyType<RAGQueryInput>
+    export type QueryContractMutationError = ErrorType<void>
+
+    /**
+ * @summary Query a contract using RAG
+ */
+export const useQueryContract = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryContract>>, TError,{id: number;data: BodyType<RAGQueryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof queryContract>>,
+        TError,
+        {id: number;data: BodyType<RAGQueryInput>},
+        TContext
+      > => {
+      return useMutation(getQueryContractMutationOptions(options));
+    }
 

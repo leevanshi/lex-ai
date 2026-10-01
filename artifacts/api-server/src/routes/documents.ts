@@ -146,7 +146,38 @@ router.post("/documents", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
-  const content = generateDocumentContent(type, answers as Record<string, string>);
+  // Convert answers to a readable string for the prompt
+  const answersText = Object.entries(answers || {})
+    .map(([k, v]) => `- ${k.replace(/_/g, " ")}: ${v}`)
+    .join("\n");
+
+  const prompt = `Generate a comprehensive, legally sound ${type.replace(/_/g, " ")}. 
+The document must strictly follow a structured Markdown format containing these exact sections where applicable:
+# [Document Title]
+## Parties
+## Effective Date
+## Definitions
+## Obligations & Clauses
+## Termination
+## Dispute Resolution
+## Governing Law
+## Signatures
+
+Use professional Indian legal terminology.
+
+User Requirements:
+${answersText}`;
+
+  // Call the AI Service
+  let content = "";
+  try {
+    const draftResult = await aiService.generateDraft(prompt, "You are an expert Indian corporate lawyer and contract drafter.");
+    content = draftResult.content;
+  } catch (err: any) {
+    console.error("AI Generation Error:", err);
+    res.status(500).json({ error: "Failed to generate document via AI." });
+    return;
+  }
 
   const doc = await db.insert(documentsTable).values({
     userId: user[0].id,

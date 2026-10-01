@@ -80,7 +80,7 @@ export default function DocumentDetail() {
       const blobUrl = URL.createObjectURL(blob);
       const link = window.document.createElement("a");
       link.href = blobUrl;
-      link.download = `${result.title || document?.title || "document"}.txt`;
+      link.download = `${result.title || document?.title || "document"}.md`;
       link.click();
       URL.revokeObjectURL(blobUrl);
       toast({ title: "Download ready", description: "Your document has been downloaded." });
@@ -138,7 +138,7 @@ export default function DocumentDetail() {
               </Button>
               <Button onClick={handleDownload} className="gap-2 flex-1 sm:flex-none">
                 <Download className="w-4 h-4" />
-                Download PDF
+                Download Markdown
               </Button>
             </>
           )}
@@ -199,9 +199,9 @@ export default function DocumentDetail() {
             />
           </div>
         ) : (
-          <div className="p-8 md:p-12 prose max-w-none prose-slate prose-headings:font-bold prose-h1:text-center prose-h1:mb-12">
+          <div className="p-8 md:p-12 prose max-w-none prose-slate prose-headings:font-bold prose-h1:text-center prose-h1:mb-12 text-slate-800">
             {document.content ? (
-              <div dangerouslySetInnerHTML={{ __html: document.content.replace(/\n/g, '<br/>') }} />
+              <div dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(document.content) }} />
             ) : (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <AlertCircle className="w-10 h-10 text-slate-300 mb-4" />
@@ -214,4 +214,34 @@ export default function DocumentDetail() {
       </Card>
     </div>
   );
+}
+
+// Simple fallback markdown renderer since react-markdown installation failed on network
+function renderSimpleMarkdown(text: string) {
+  if (!text) return "";
+  let html = text;
+  
+  // Headers
+  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  
+  // Bold
+  html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+  
+  // Lists
+  html = html.replace(/^\- (.*$)/gim, '<ul><li>$1</li></ul>');
+  html = html.replace(/<\/ul>\n<ul>/gim, '');
+  
+  // Newlines (paragraphs)
+  html = html.replace(/\n\n/g, '</p><p>');
+  html = html.replace(/\n/g, '<br/>');
+  
+  // Fix nested lists/br issues
+  html = html.replace(/<br\/><li>/g, '<li>');
+  html = html.replace(/<\/h1><br\/>/g, '</h1>');
+  html = html.replace(/<\/h2><br\/>/g, '</h2>');
+  html = html.replace(/<\/h3><br\/>/g, '</h3>');
+  
+  return '<p>' + html + '</p>';
 }

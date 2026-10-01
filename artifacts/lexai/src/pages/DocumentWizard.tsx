@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { 
@@ -30,12 +30,22 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { motion, AnimatePresence } from "framer-motion";
+
+const GENERATION_STEPS = [
+  "Preparing legal context...",
+  "Analysing requirements...",
+  "Drafting clauses...",
+  "Reviewing legal structure...",
+  "Finalising document..."
+];
 
 export default function DocumentWizard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedType, setSelectedType] = useState<any>(null);
+  const [genStepIdx, setGenStepIdx] = useState(0);
   
   const { data: types, isLoading: isTypesLoading } = useGetDocumentTypes();
   const { data: subscription } = useQuery(getGetMySubscriptionQueryOptions());
@@ -112,6 +122,20 @@ export default function DocumentWizard() {
       }
     }
   };
+
+  // Simulate progress steps during generation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (createDocument.isPending) {
+      setGenStepIdx(0);
+      interval = setInterval(() => {
+        setGenStepIdx(prev => (prev < GENERATION_STEPS.length - 1 ? prev + 1 : prev));
+      }, 1500); // Progresses every 1.5s
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [createDocument.isPending]);
 
   const userPlan = subscription?.plan || 'free';
   
@@ -229,9 +253,40 @@ export default function DocumentWizard() {
               {step === 2 ? "Provide the necessary details to generate your customized document." : "Please review the details below before finalizing."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 relative">
+            <AnimatePresence>
+              {createDocument.isPending && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm rounded-b-xl"
+                >
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+                    className="w-12 h-12 border-4 border-slate-200 border-t-slate-900 rounded-full mb-6"
+                  />
+                  <div className="h-8 overflow-hidden relative w-full max-w-[300px] text-center">
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        key={genStepIdx}
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -20, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-lg font-medium text-slate-900 absolute w-full"
+                      >
+                        {GENERATION_STEPS[genStepIdx]}
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form onSubmit={form.handleSubmit(onSubmit)} className={cn("space-y-6", createDocument.isPending && "opacity-50 pointer-events-none")}>
                 
                 {/* Title is always required */}
                 <FormField

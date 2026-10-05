@@ -21,6 +21,7 @@ import type {
 
 import type {
   Contract,
+  ContractAnalysisResponse,
   ContractUploadResponse,
   DashboardStats,
   Document,
@@ -28,8 +29,12 @@ import type {
   DocumentInput,
   DocumentType,
   DocumentUpdate,
+  ExplainClause200,
+  ExplainClauseBody,
   HealthStatus,
   ListDocumentsParams,
+  NegotiateClauseBody,
+  NegotiationResponse,
   RAGQueryInput,
   RAGQueryResponse,
   Subscription,
@@ -1483,5 +1488,217 @@ export const useQueryContract = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getQueryContractMutationOptions(options));
+    }
+
+export const getAnalyzeContractUrl = (id: number,) => {
+
+
+
+
+  return `/api/contracts/${id}/analyze`
+}
+
+/**
+ * @summary Analyze a contract for risks
+ */
+export const analyzeContract = async (id: number, options?: RequestInit): Promise<ContractAnalysisResponse> => {
+
+  return customFetch<ContractAnalysisResponse>(getAnalyzeContractUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getAnalyzeContractMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeContract>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeContract>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['analyzeContract'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeContract>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  analyzeContract(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeContractMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeContract>>>
+
+    export type AnalyzeContractMutationError = ErrorType<void>
+
+    /**
+ * @summary Analyze a contract for risks
+ */
+export const useAnalyzeContract = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeContract>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeContract>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getAnalyzeContractMutationOptions(options));
+    }
+
+export const getExplainClauseUrl = () => {
+
+
+
+
+  return `/api/contracts/explain`
+}
+
+/**
+ * @summary Explain a legal clause
+ */
+export const explainClause = async (explainClauseBody: ExplainClauseBody, options?: RequestInit): Promise<ExplainClause200> => {
+
+  return customFetch<ExplainClause200>(getExplainClauseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      explainClauseBody,)
+  }
+);}
+
+
+
+
+export const getExplainClauseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof explainClause>>, TError,{data: BodyType<ExplainClauseBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof explainClause>>, TError,{data: BodyType<ExplainClauseBody>}, TContext> => {
+
+const mutationKey = ['explainClause'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof explainClause>>, {data: BodyType<ExplainClauseBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  explainClause(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExplainClauseMutationResult = NonNullable<Awaited<ReturnType<typeof explainClause>>>
+    export type ExplainClauseMutationBody = BodyType<ExplainClauseBody>
+    export type ExplainClauseMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Explain a legal clause
+ */
+export const useExplainClause = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof explainClause>>, TError,{data: BodyType<ExplainClauseBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof explainClause>>,
+        TError,
+        {data: BodyType<ExplainClauseBody>},
+        TContext
+      > => {
+      return useMutation(getExplainClauseMutationOptions(options));
+    }
+
+export const getNegotiateClauseUrl = () => {
+
+
+
+
+  return `/api/contracts/negotiate`
+}
+
+/**
+ * @summary Generate negotiation suggestions
+ */
+export const negotiateClause = async (negotiateClauseBody: NegotiateClauseBody, options?: RequestInit): Promise<NegotiationResponse> => {
+
+  return customFetch<NegotiationResponse>(getNegotiateClauseUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      negotiateClauseBody,)
+  }
+);}
+
+
+
+
+export const getNegotiateClauseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof negotiateClause>>, TError,{data: BodyType<NegotiateClauseBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof negotiateClause>>, TError,{data: BodyType<NegotiateClauseBody>}, TContext> => {
+
+const mutationKey = ['negotiateClause'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof negotiateClause>>, {data: BodyType<NegotiateClauseBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  negotiateClause(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type NegotiateClauseMutationResult = NonNullable<Awaited<ReturnType<typeof negotiateClause>>>
+    export type NegotiateClauseMutationBody = BodyType<NegotiateClauseBody>
+    export type NegotiateClauseMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate negotiation suggestions
+ */
+export const useNegotiateClause = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof negotiateClause>>, TError,{data: BodyType<NegotiateClauseBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof negotiateClause>>,
+        TError,
+        {data: BodyType<NegotiateClauseBody>},
+        TContext
+      > => {
+      return useMutation(getNegotiateClauseMutationOptions(options));
     }
 

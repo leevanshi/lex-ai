@@ -7,6 +7,9 @@
  */
 
 export * from './contract';
+export * from './contractAnalysisResponse';
+export * from './contractAnalysisResponseRiskLevel';
+export * from './contractAnalysisResponseRiskyClausesItem';
 export * from './contractStatus';
 export * from './contractUploadResponse';
 export * from './contractUploadResponseStatus';
@@ -24,8 +27,14 @@ export * from './documentType';
 export * from './documentTypeRequiredPlan';
 export * from './documentUpdate';
 export * from './documentUpdateStatus';
+export * from './explainClause200';
+export * from './explainClauseBody';
 export * from './healthStatus';
 export * from './listDocumentsParams';
+export * from './negotiateClauseBody';
+export * from './negotiateClauseBodyPosition';
+export * from './negotiationResponse';
+export * from './negotiationResponseSuggestionsItem';
 export * from './rAGQueryInput';
 export * from './rAGQueryResponse';
 export * from './subscription';

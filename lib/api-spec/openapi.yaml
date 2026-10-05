@@ -389,6 +389,82 @@ paths:
         "500":
           description: Server error
 
+  /contracts/{id}/analyze:
+    post:
+      operationId: analyzeContract
+      tags: [contracts]
+      summary: Analyze a contract for risks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Contract analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractAnalysisResponse"
+        "404":
+          description: Not found
+        "500":
+          description: Server error
+
+  /contracts/explain:
+    post:
+      operationId: explainClause
+      tags: [contracts]
+      summary: Explain a legal clause
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clause]
+              properties:
+                clause:
+                  type: string
+      responses:
+        "200":
+          description: Clause explanation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [explanation]
+                properties:
+                  explanation:
+                    type: string
+
+  /contracts/negotiate:
+    post:
+      operationId: negotiateClause
+      tags: [contracts]
+      summary: Generate negotiation suggestions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clause, position]
+              properties:
+                clause:
+                  type: string
+                position:
+                  type: string
+                  enum: [favorable, unfavorable]
+      responses:
+        "200":
+          description: Negotiation suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NegotiationResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -642,5 +718,44 @@ components:
       properties:
         answer:
           type: string
+
+    ContractAnalysisResponse:
+      type: object
+      required: [riskLevel, summary, riskyClauses]
+      properties:
+        riskLevel:
+          type: string
+          enum: [low, medium, high]
+        summary:
+          type: string
+        riskyClauses:
+          type: array
+          items:
+            type: object
+            required: [text, risk, suggestion]
+            properties:
+              text:
+                type: string
+              risk:
+                type: string
+              suggestion:
+                type: string
+
+    NegotiationResponse:
+      type: object
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          items:
+            type: object
+            required: [originalText, suggestedText, reasoning]
+            properties:
+              originalText:
+                type: string
+              suggestedText:
+                type: string
+              reasoning:
+                type: string
 
 

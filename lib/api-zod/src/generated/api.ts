@@ -317,3 +317,50 @@ export const QueryContractResponse = zod.object({
 })
 
 
+/**
+ * @summary Analyze a contract for risks
+ */
+export const AnalyzeContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AnalyzeContractResponse = zod.object({
+  "riskLevel": zod.enum(['low', 'medium', 'high']),
+  "summary": zod.string(),
+  "riskyClauses": zod.array(zod.object({
+  "text": zod.string(),
+  "risk": zod.string(),
+  "suggestion": zod.string()
+}))
+})
+
+
+/**
+ * @summary Explain a legal clause
+ */
+export const ExplainClauseBody = zod.object({
+  "clause": zod.string()
+})
+
+export const ExplainClauseResponse = zod.object({
+  "explanation": zod.string()
+})
+
+
+/**
+ * @summary Generate negotiation suggestions
+ */
+export const NegotiateClauseBody = zod.object({
+  "clause": zod.string(),
+  "position": zod.enum(['favorable', 'unfavorable'])
+})
+
+export const NegotiateClauseResponse = zod.object({
+  "suggestions": zod.array(zod.object({
+  "originalText": zod.string(),
+  "suggestedText": zod.string(),
+  "reasoning": zod.string()
+}))
+})
+
+

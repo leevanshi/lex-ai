@@ -232,6 +232,37 @@ export interface RAGQueryResponse {
   answer: string;
 }
 
+export type ContractAnalysisResponseRiskLevel = typeof ContractAnalysisResponseRiskLevel[keyof typeof ContractAnalysisResponseRiskLevel];
+
+
+export const ContractAnalysisResponseRiskLevel = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+} as const;
+
+export type ContractAnalysisResponseRiskyClausesItem = {
+  text: string;
+  risk: string;
+  suggestion: string;
+};
+
+export interface ContractAnalysisResponse {
+  riskLevel: ContractAnalysisResponseRiskLevel;
+  summary: string;
+  riskyClauses: ContractAnalysisResponseRiskyClausesItem[];
+}
+
+export type NegotiationResponseSuggestionsItem = {
+  originalText: string;
+  suggestedText: string;
+  reasoning: string;
+};
+
+export interface NegotiationResponse {
+  suggestions: NegotiationResponseSuggestionsItem[];
+}
+
 export type ListDocumentsParams = {
 type?: string;
 status?: string;
@@ -241,5 +272,26 @@ export type UploadContractBody = {
   file: Blob;
   userId: string;
   title?: string;
+};
+
+export type ExplainClauseBody = {
+  clause: string;
+};
+
+export type ExplainClause200 = {
+  explanation: string;
+};
+
+export type NegotiateClauseBodyPosition = typeof NegotiateClauseBodyPosition[keyof typeof NegotiateClauseBodyPosition];
+
+
+export const NegotiateClauseBodyPosition = {
+  favorable: 'favorable',
+  unfavorable: 'unfavorable',
+} as const;
+
+export type NegotiateClauseBody = {
+  clause: string;
+  position: NegotiateClauseBodyPosition;
 };
 

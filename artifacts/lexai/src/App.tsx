@@ -15,6 +15,7 @@ import DocumentDetail from "@/pages/DocumentDetail";
 import Subscription from "@/pages/Subscription";
 import Settings from "@/pages/Settings";
 import AskLexAI from "@/pages/AskLexAI";
+import ClauseExplainer from "@/pages/ClauseExplainer";
 import ContractUpload from "@/pages/contracts/ContractUpload";
 import ContractDetail from "@/pages/contracts/ContractDetail";
 import NotFound from "@/pages/not-found";
@@ -206,6 +207,7 @@ function ClerkProviderWithRoutes() {
             
             <Route path="/dashboard"><ProtectedRoute component={Dashboard} /></Route>
             <Route path="/ask"><ProtectedRoute component={AskLexAI} /></Route>
+            <Route path="/explain"><ProtectedRoute component={ClauseExplainer} /></Route>
             <Route path="/contracts/review"><ProtectedRoute component={ContractUpload} /></Route>
             <Route path="/contracts/:id"><ProtectedRoute component={ContractDetail} /></Route>
             <Route path="/documents"><ProtectedRoute component={Documents} /></Route>

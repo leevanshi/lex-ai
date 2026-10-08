@@ -1,4 +1,5 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { config } from "./config";
 import {
   GetDocumentTextDetectionCommand,
   StartDocumentTextDetectionCommand,
@@ -7,15 +8,15 @@ import {
 import { DocumentProcessor } from "./documentProcessor";
 
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: config.AWS_REGION || "us-east-1",
 });
 
 const textractClient = new TextractClient({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: config.AWS_REGION || "us-east-1",
 });
 
 export function isDocumentPipelineEnabled(): boolean {
-  return Boolean(process.env.AWS_S3_BUCKET_NAME);
+  return Boolean(config.AWS_S3_BUCKET_NAME);
 }
 
 function sanitizeFileName(fileName: string): string {
@@ -30,7 +31,7 @@ function buildObjectKey(userId: number, fileName: string): string {
     .replace(/[^a-zA-Z0-9._-]/g, "-")
     .toLowerCase();
 
-  return `${process.env.AWS_S3_DOCUMENT_PREFIX || "documents"}/user-${userId}/${Date.now()}-${safeName}`;
+  return `${config.AWS_S3_DOCUMENT_PREFIX || "documents"}/user-${userId}/${Date.now()}-${safeName}`;
 }
 
 export async function uploadDocumentToS3({
@@ -44,7 +45,7 @@ export async function uploadDocumentToS3({
   fileBuffer: Buffer;
   mimeType: string;
 }): Promise<{ bucket: string; key: string } | null> {
-  const bucketName = process.env.AWS_S3_BUCKET_NAME;
+  const bucketName = config.AWS_S3_BUCKET_NAME;
   if (!bucketName) {
     return null;
   }

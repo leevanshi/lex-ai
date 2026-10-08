@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response } from "express";
+import { config } from "./lib/config";
 import cors from "cors";
 import { pinoHttp } from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -51,7 +52,7 @@ app.use(
   clerkMiddleware((req) => ({
     publishableKey: publishableKeyFromHost(
       getClerkProxyHost(req) ?? "",
-      process.env.CLERK_PUBLISHABLE_KEY,
+      config.CLERK_PUBLISHABLE_KEY,
     ),
   })),
 );

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { config } from "../config";
 import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import {
   BedrockRuntimeClient,
@@ -43,20 +44,20 @@ function parseJsonObject<T>(input: string, fallback: T): T {
 }
 
 function getConfiguredProvider(): AIProviderType {
-  const configured = (process.env.AI_PROVIDER || "ollama").trim().toLowerCase();
+  const configured = (config.AI_PROVIDER || "ollama").trim().toLowerCase();
 
   if (configured === "openai") return "openai";
   if (configured === "bedrock") return "bedrock";
   if (configured === "ollama") return "ollama";
 
-  return process.env.OPENAI_API_KEY ? "openai" : "ollama";
+  return config.OPENAI_API_KEY ? "openai" : "ollama";
 }
 
 class OllamaProvider implements AIProvider {
   providerName = "ollama";
 
   private async request<T>(path: string, payload: Record<string, unknown>): Promise<T> {
-    const baseUrl = (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
+    const baseUrl = (config.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/$/, "");
     try {
       const response = await fetch(`${baseUrl}${path}`, {
         method: "POST",
@@ -79,7 +80,7 @@ class OllamaProvider implements AIProvider {
 
   async generateEmbedding(text: string): Promise<number[]> {
     const response = await this.request<{ embedding?: number[] }>("/api/embeddings", {
-      model: process.env.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text",
+      model: config.OLLAMA_EMBEDDING_MODEL || "nomic-embed-text",
       prompt: text,
     });
 
@@ -96,7 +97,7 @@ class OllamaProvider implements AIProvider {
     maxTokens?: number;
   }): Promise<string> {
     const response = await this.request<{ message?: { content?: string } }>("/api/chat", {
-      model: process.env.OLLAMA_MODEL || "llama3.2",
+      model: config.OLLAMA_MODEL || "llama3.2",
       stream: false,
       format: "text",
       options: { num_predict: maxTokens },
@@ -118,12 +119,12 @@ class BedrockAIProvider implements AIProvider {
 
   constructor() {
     this.client = new BedrockRuntimeClient({
-      region: process.env.AWS_REGION || "us-east-1",
+      region: config.AWS_REGION || "us-east-1",
     });
     this.textModelId =
-      process.env.AWS_BEDROCK_MODEL_ID || DEFAULT_BEDROCK_TEXT_MODEL;
+      config.AWS_BEDROCK_MODEL_ID || DEFAULT_BEDROCK_TEXT_MODEL;
     this.embeddingModelId =
-      process.env.AWS_BEDROCK_EMBEDDING_MODEL_ID || DEFAULT_BEDROCK_EMBEDDING_MODEL;
+      config.AWS_BEDROCK_EMBEDDING_MODEL_ID || DEFAULT_BEDROCK_EMBEDDING_MODEL;
   }
 
   private async invokeModel(modelId: string, input: Record<string, unknown>) {
@@ -200,7 +201,7 @@ class OpenAIProvider implements AIProvider {
   private openai: OpenAI;
 
   constructor() {
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = config.OPENAI_API_KEY;
     if (!apiKey || apiKey === "sk-your-openai-api-key-here") {
       throw new Error("Valid OPENAI_API_KEY environment variable is required");
     }
@@ -288,7 +289,7 @@ export class AIService {
     this.demoProvider = new DemoAIProvider();
     
     // Simple fallback logic if primary is Bedrock or OpenAI
-    if (this.primaryProvider.providerName !== "ollama" && process.env.OLLAMA_BASE_URL) {
+    if (this.primaryProvider.providerName !== "ollama" && config.OLLAMA_BASE_URL) {
        this.fallbackProvider = new OllamaProvider();
     }
   }

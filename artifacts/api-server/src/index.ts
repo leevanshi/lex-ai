@@ -1,7 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { config } from "./lib/config";
 
-const rawPort = process.env["PORT"] || "8080";
+const rawPort = config.PORT;
 const port = Number(rawPort);
 
 if (Number.isNaN(port) || port <= 0) {

@@ -1,56 +1,50 @@
 import crypto from "crypto";
-
-export interface LegalMetadata {
-  documentId: string;
-  documentTitle: string;
-  documentType: string;
-  jurisdiction: string;
-  court?: string;
-  citation?: string;
-  date?: string;
-  sourceUrl?: string;
-}
-
-export interface LegalChunk {
-  chunkId: string;
-  documentId: string;
-  text: string;
-  chapter?: string;
-  section?: string;
-  metadata: LegalMetadata;
-}
+import { LegalChunk, ChunkMetadata } from "./types";
 
 export class LegalChunker {
-  /**
-   * Splits an Indian legal act into logically separated sections.
-   * Preserves hierarchy (e.g. tracking the current Chapter).
-   */
-  public chunkAct(text: string, metadata: LegalMetadata): LegalChunk[] {
+  
+  public chunkDocument(text: string, documentType: string): LegalChunk[] {
+    const cleaned = this.cleanText(text);
+    if (documentType === "act" || documentType === "rule") {
+      return this.chunkAct(cleaned);
+    }
+    return this.chunkGeneric(cleaned);
+  }
+
+  private cleanText(text: string): string {
+    return text
+      .replace(/\r\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .trim();
+  }
+
+  private chunkAct(text: string): LegalChunk[] {
     const chunks: LegalChunk[] = [];
     const lines = text.split('\n');
 
+    let currentPart = "";
     let currentChapter = "";
     let currentSection = "";
+    let currentHeading = "";
+    
     let currentBuffer: string[] = [];
 
-    // Simple regex to match standard Indian Act chapters and sections
-    // e.g., "CHAPTER II" or "CHAPTER 2"
-    const chapterRegex = /^CHAPTER\s+([A-Z0-9]+)/i;
-    // e.g., "1. Short title..." or "14A. Definitions..."
+    const partRegex = /^PART\s+([A-ZIVX]+)/i;
+    const chapterRegex = /^CHAPTER\s+([A-ZIVX0-9]+)/i;
     const sectionRegex = /^([0-9]+[A-Z]?)\.\s+(.*)/i;
 
     const flushBuffer = () => {
       if (currentBuffer.length > 0) {
         const chunkText = currentBuffer.join('\n').trim();
-        if (chunkText.length > 20) { // Ignore tiny fragmented chunks
-          chunks.push({
-            chunkId: this.generateHash(chunkText),
-            documentId: metadata.documentId,
-            text: chunkText,
+        if (chunkText.length > 20) {
+          chunks.push(this.createChunk(chunkText, {
+            parentSection: currentPart || undefined,
             chapter: currentChapter || undefined,
-            section: currentSection || undefined,
-            metadata,
-          });
+            sectionNumber: currentSection || undefined,
+            heading: currentHeading || undefined
+          }));
         }
         currentBuffer = [];
       }
@@ -60,19 +54,30 @@ export class LegalChunker {
       const trimmed = line.trim();
       if (!trimmed) continue;
 
+      const partMatch = trimmed.match(partRegex);
+      if (partMatch) {
+        flushBuffer();
+        currentPart = `PART ${partMatch[1]}`;
+        currentChapter = ""; // Reset chapter on new part
+        currentHeading = trimmed;
+        currentBuffer.push(trimmed);
+        continue;
+      }
+
       const chapterMatch = trimmed.match(chapterRegex);
       if (chapterMatch) {
         flushBuffer();
-        currentChapter = `Chapter ${chapterMatch[1]}`;
+        currentChapter = `CHAPTER ${chapterMatch[1]}`;
+        currentHeading = trimmed;
         currentBuffer.push(trimmed);
         continue;
       }
 
       const sectionMatch = trimmed.match(sectionRegex);
       if (sectionMatch && trimmed.length < 500) { 
-        // Likely a section header
         flushBuffer();
-        currentSection = `Section ${sectionMatch[1]}`;
+        currentSection = sectionMatch[1];
+        currentHeading = sectionMatch[2];
         currentBuffer.push(trimmed);
         continue;
       }
@@ -81,19 +86,12 @@ export class LegalChunker {
     }
 
     flushBuffer();
-
     return chunks;
   }
 
-  /**
-   * Universal chunker for documents that don't neatly follow Act hierarchy
-   * (e.g. Guidelines, plain Articles, loosely structured judgments).
-   */
-  public chunkGeneric(text: string, metadata: LegalMetadata, maxTokens = 800): LegalChunk[] {
-    // Basic character-based sliding window splitting for now.
-    // In production, we'll swap this with token-based recursive splitting.
+  private chunkGeneric(text: string, maxTokens = 800): LegalChunk[] {
     const chunks: LegalChunk[] = [];
-    const chunkSize = maxTokens * 4; // Approx chars per token
+    const chunkSize = maxTokens * 4; 
     const overlap = 200;
 
     let index = 0;
@@ -101,31 +99,36 @@ export class LegalChunker {
       const end = Math.min(index + chunkSize, text.length);
       let slice = text.slice(index, end);
       
-      // Try to back up to the nearest newline to avoid breaking sentences
       if (end < text.length) {
         const lastNewline = slice.lastIndexOf('\n');
         if (lastNewline > chunkSize * 0.5) {
           slice = slice.slice(0, lastNewline);
+        } else {
+          const lastPeriod = slice.lastIndexOf('. ');
+          if (lastPeriod > chunkSize * 0.5) {
+            slice = slice.slice(0, lastPeriod + 1);
+          }
         }
       }
 
       const chunkText = slice.trim();
       if (chunkText.length > 20) {
-        chunks.push({
-          chunkId: this.generateHash(chunkText),
-          documentId: metadata.documentId,
-          text: chunkText,
-          metadata,
-        });
+        chunks.push(this.createChunk(chunkText, {}));
       }
 
       index += slice.length - overlap;
     }
-
     return chunks;
   }
 
-  private generateHash(content: string): string {
-    return crypto.createHash("sha256").update(content).digest("hex").slice(0, 16);
+  private createChunk(content: string, metadata: ChunkMetadata): LegalChunk {
+    const normalizedContent = content.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return {
+      content,
+      normalizedContent,
+      tokenCount: Math.ceil(content.length / 4), // rough estimate
+      contentHash: crypto.createHash("sha256").update(content).digest("hex"),
+      metadata
+    };
   }
 }

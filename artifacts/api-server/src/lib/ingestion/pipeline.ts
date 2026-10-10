@@ -1,110 +1,125 @@
-import { LegalChunker, type LegalMetadata, type LegalChunk } from "./legalChunker";
-import { aiService } from "../ai";
-
-export type IngestionStatus = 
-  | "PENDING"
-  | "DOWNLOADING"
-  | "EXTRACTING"
-  | "CLEANING"
-  | "CHUNKING"
-  | "EMBEDDING"
-  | "INDEXING"
-  | "COMPLETED"
-  | "FAILED"
-  | "RETRYING";
-
-export interface IngestionJob {
-  jobId: string;
-  status: IngestionStatus;
-  metadata: LegalMetadata;
-  sourceText?: string;
-  errorReason?: string;
-}
+import { randomUUID } from "crypto";
+import { db, legalDocumentsTable, legalChunksTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
+import { DocumentMetadata, IngestionJobResult, IngestionSource } from "./types";
+import { Deduplicator } from "./deduplicator";
+import { LegalChunker } from "./legalChunker";
+import { Embedder } from "./embedder";
+import { logger } from "../logger";
 
 export class IngestionPipeline {
+  private deduplicator: Deduplicator;
   private chunker: LegalChunker;
+  private embedder: Embedder;
 
   constructor() {
+    this.deduplicator = new Deduplicator();
     this.chunker = new LegalChunker();
+    this.embedder = new Embedder();
   }
 
-  /**
-   * Main entry point for processing a raw document into vector-ready chunks.
-   * In a full production AWS environment, this would be an SQS worker or Step Function.
-   */
   public async processDocument(
-    rawText: string, 
-    metadata: LegalMetadata, 
-    onProgress?: (status: IngestionStatus) => void
-  ) {
-    const jobId = `job_${Date.now()}_${metadata.documentId}`;
-    
+    source: IngestionSource,
+    metadata: DocumentMetadata
+  ): Promise<IngestionJobResult> {
+    const jobId = `job_${randomUUID()}`;
+    logger.info({ jobId, title: metadata.title }, "Starting ingestion job");
+
     try {
-      onProgress?.("CLEANING");
-      const cleanedText = this.cleanText(rawText);
-
-      onProgress?.("CHUNKING");
-      const chunks = metadata.documentType === "act" || metadata.documentType === "rule"
-        ? this.chunker.chunkAct(cleanedText, metadata)
-        : this.chunker.chunkGeneric(cleanedText, metadata);
-
-      if (chunks.length === 0) {
-        throw new Error("Chunking resulted in 0 chunks. Document might be empty.");
+      const rawText = source.text;
+      if (!rawText) {
+        throw new Error("Only direct text ingestion is supported in this example");
       }
 
-      onProgress?.("EMBEDDING");
-      const embeddedChunks = await this.embedChunks(chunks);
+      // Step 1: Deduplication
+      const checksum = this.deduplicator.generateChecksum(rawText);
+      const existingDocId = await this.deduplicator.checkExists(checksum);
+      
+      if (existingDocId) {
+        logger.info({ jobId, existingDocId }, "Document already exists. Skipping ingestion.");
+        return {
+          jobId,
+          documentId: existingDocId,
+          status: "SKIPPED",
+          totalChunks: 0,
+          errorReason: "Document checksum already exists."
+        };
+      }
 
-      onProgress?.("INDEXING");
-      await this.indexToDatabase(embeddedChunks);
+      // Step 2: Create Document Record
+      const documentId = `doc_${randomUUID()}`;
+      await db.insert(legalDocumentsTable).values({
+        id: documentId,
+        title: metadata.title,
+        documentType: metadata.documentType,
+        sourceUrl: metadata.sourceUrl,
+        sourceName: metadata.sourceName,
+        jurisdiction: metadata.jurisdiction,
+        court: metadata.court,
+        legislation: metadata.legislation,
+        actName: metadata.actName,
+        version: metadata.version,
+        publicationDate: metadata.publicationDate,
+        effectiveDate: metadata.effectiveDate,
+        checksum,
+        language: metadata.language || "en",
+        status: "processing"
+      });
 
-      onProgress?.("COMPLETED");
+      // Step 3: Legal-Aware Chunking
+      const chunks = this.chunker.chunkDocument(rawText, metadata.documentType);
+      if (chunks.length === 0) {
+        throw new Error("Chunking resulted in 0 chunks.");
+      }
+
+      // Step 4: Embedding
+      const embeddedChunks = await this.embedder.embedChunks(chunks, (done, total) => {
+        logger.info({ jobId, done, total }, "Embedding progress");
+      });
+
+      // Step 5: Indexing to pgvector
+      const chunkRecords = embeddedChunks.map(c => ({
+        id: `chunk_${randomUUID()}`,
+        documentId,
+        parentSection: c.metadata.parentSection,
+        chapter: c.metadata.chapter,
+        sectionNumber: c.metadata.sectionNumber,
+        heading: c.metadata.heading,
+        content: c.content,
+        normalizedContent: c.normalizedContent,
+        tokenCount: c.tokenCount,
+        contentHash: c.contentHash,
+        embedding: c.embedding!,
+        metadata: c.metadata.customData || {}
+      }));
+
+      // Insert in batches if very large, but Drizzle supports bulk inserts
+      await db.insert(legalChunksTable).values(chunkRecords);
+
+      // Update status
+      await db.update(legalDocumentsTable)
+        .set({ status: "active" })
+        .where(eq(legalDocumentsTable.id, documentId));
+
+      logger.info({ jobId, documentId }, "Ingestion completed successfully");
+
       return {
         jobId,
+        documentId,
         status: "COMPLETED",
         totalChunks: embeddedChunks.length,
       };
 
     } catch (error: any) {
-      onProgress?.("FAILED");
+      logger.error({ jobId, err: error }, "Ingestion failed");
       return {
         jobId,
+        documentId: "",
         status: "FAILED",
-        errorReason: error.message || "Unknown error during ingestion",
+        totalChunks: 0,
+        errorReason: error.message
       };
     }
-  }
-
-  private cleanText(text: string): string {
-    // Remove excessive whitespace, normalize quotes, strip invalid chars
-    return text
-      .replace(/\r\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"')
-      .trim();
-  }
-
-  private async embedChunks(chunks: LegalChunk[]): Promise<Array<LegalChunk & { embedding: number[] }>> {
-    const embedded: Array<LegalChunk & { embedding: number[] }> = [];
-    
-    // Process sequentially for safety against rate limits. 
-    // In production, we can batch these using Promise.all with a concurrency limiter.
-    for (const chunk of chunks) {
-      const vector = await aiService.generateEmbedding(chunk.text);
-      embedded.push({
-        ...chunk,
-        embedding: vector,
-      });
-    }
-
-    return embedded;
-  }
-
-  private async indexToDatabase(chunks: Array<LegalChunk & { embedding: number[] }>) {
-    // Stub for Phase 6 Database Integration
-    // This will map to drizzle-orm INSERT into the new vector tables
-    console.log(`[Ingestion Pipeline] Indexed ${chunks.length} chunks to database (mock)`);
   }
 }
 
